@@ -1,0 +1,55 @@
+spring:
+  application:
+    name: ms_user
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+  security:
+    oauth2:
+      client:
+        registration:
+          keycloak:
+            client-id: verborum-users-ms
+            client-secret: yvFbfcX79if4jI0XiZLtT8QF092IP6eu
+            authorization-grant-type: authorization_code
+            scope:
+              - openid
+              - profile
+              - email
+        provider:
+          keycloak:
+            issuer-uri: http://localhost:8081/realms/VerborumUsers  # Changed from 8083 to 8081
+            user-name-attribute: preferred_username
+
+server:
+  port: 8083
+  servlet:
+    session:
+      timeout: 15m
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  info:
+    env:
+      enabled: true
+
+info:
+  app:
+    name: Verborum Users Micro Service
+    version: 1.0.0
+
+keycloak:
+  auth-server-url: http://localhost:8081  # Removed /auth
+  realm: VerborumUsers
+  resource: verborum-users-ms
+  credentials:
+    secret: yvFbfcX79if4jI0XiZLtT8QF092IP6eu
+  admin:
+    username: admin
+    password: admin
+  public-client: false
+  bearer-only: true
+  ssl-required: external

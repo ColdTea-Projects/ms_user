@@ -14,7 +14,7 @@ import static de.coldtea.verborum.msuser.common.DTOMessageConstants.*;
 public class UserResponseDTO {
 
     @NotBlank(message = USER_ID)
-    private String wordId;
+    private String id;
 
     @NotBlank(message = USER_EMAIL)
     private String email;

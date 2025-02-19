@@ -14,6 +14,7 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -23,6 +24,7 @@ import java.util.Map;
 @Slf4j
 public class UserServiceImpl implements UserService {
     private final WebClient webClient;
+    private final String keycloakUrl;
     private final String realm;
     private final String clientId;
     private final String clientSecret;
@@ -32,6 +34,7 @@ public class UserServiceImpl implements UserService {
             @Value("${keycloak.realm}") String realm,
             @Value("${keycloak.resource}") String clientId,
             @Value("${keycloak.credentials.secret}") String clientSecret) {
+        this.keycloakUrl = keycloakUrl;        // http://localhost:8081
         this.realm = realm;
         this.clientId = clientId;
         this.clientSecret = clientSecret;
@@ -106,8 +109,41 @@ public class UserServiceImpl implements UserService {
             formData.add("username", username);
             formData.add("password", password);
 
-            Map<String, String> tokenResponse = webClient.post()
+            log.debug("Token request details:");
+            log.debug("URL: {}/realms/{}/protocol/openid-connect/token", keycloakUrl, realm);
+            log.debug("Client ID: {}", clientId);
+            log.debug("Grant Type: password");
+            // Don't log secrets or passwords
+
+            return webClient.post()
                     .uri("/realms/{realm}/protocol/openid-connect/token", realm)
+                    .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                    .body(BodyInserters.fromFormData(formData))
+                    .retrieve()
+                    .bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {})
+                    .block()
+                    .get("access_token")
+                    .toString();
+
+        } catch (WebClientResponseException e) {
+            log.error("Token request failed. Status: {}, Body: {}",
+                    e.getStatusCode(), e.getResponseBodyAsString());
+            throw new RuntimeException("Failed to get access token: " + e.getMessage(), e);
+        }
+    }
+
+    private String getAdminToken() {
+        try {
+            MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
+            formData.add("grant_type", "password");
+            formData.add("client_id", "admin-cli");  // Use admin-cli client
+            formData.add("username", "admin");       // Your Keycloak admin username
+            formData.add("password", "admin");       // Your Keycloak admin password
+
+            log.info("Attempting to get admin token from: {}/realms/master/protocol/openid-connect/token", keycloakUrl);
+
+            Map<String, String> tokenResponse = webClient.post()
+                    .uri("/realms/master/protocol/openid-connect/token")  // Use master realm
                     .contentType(MediaType.APPLICATION_FORM_URLENCODED)
                     .body(BodyInserters.fromFormData(formData))
                     .retrieve()
@@ -115,28 +151,11 @@ public class UserServiceImpl implements UserService {
                     .block();
 
             return tokenResponse.get("access_token");
-
-        } catch (Exception e) {
-            log.error("Error getting access token", e);
-            throw new RuntimeException("Failed to get access token", e);
+        } catch (WebClientResponseException e) {
+            log.error("Admin token request failed. Status: {}, Body: {}",
+                    e.getStatusCode(), e.getResponseBodyAsString());
+            throw new RuntimeException("Failed to get admin token: " + e.getMessage(), e);
         }
-    }
-
-    private String getAdminToken() {
-        MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
-        formData.add("grant_type", "client_credentials");
-        formData.add("client_id", clientId);
-        formData.add("client_secret", clientSecret);
-
-        Map<String, String> tokenResponse = webClient.post()
-                .uri("/realms/{realm}/protocol/openid-connect/token", realm)
-                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                .body(BodyInserters.fromFormData(formData))
-                .retrieve()
-                .bodyToMono(new ParameterizedTypeReference<Map<String, String>>() {})
-                .block();
-
-        return tokenResponse.get("access_token");
     }
 }
 
